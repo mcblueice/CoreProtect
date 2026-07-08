@@ -667,14 +667,14 @@ public class ItemUtils {
         if (item == null) return "";
 
         String displayName = item.hasItemMeta() && item.getItemMeta().hasDisplayName() ? item.getItemMeta().getDisplayName() : "";
-        StringBuilder message = new StringBuilder(Color.ITALIC + displayName + Color.GREY);
+        StringBuilder message = new StringBuilder(Color.ITALIC + displayName + Color.RESET + Color.GREY);
 
         List<String> enchantments = ItemMetaHandler.getEnchantments(item, displayName);
         for (String enchantment : enchantments) {
             if (message.length() > 0) {
                 message.append("\n");
             }
-            message.append(enchantment);
+            message.append(Color.RESET).append(Color.GREY).append(enchantment);
         }
 
         if (!displayName.isEmpty()) {

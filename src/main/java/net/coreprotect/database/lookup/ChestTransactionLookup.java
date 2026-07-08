@@ -7,7 +7,6 @@ import java.util.List;
 import java.util.Locale;
 
 import org.bukkit.Location;
-import org.bukkit.Material;
 import org.bukkit.command.CommandSender;
 
 import net.coreprotect.config.ConfigHandler;
@@ -18,8 +17,8 @@ import net.coreprotect.listener.channel.PluginChannelListener;
 import net.coreprotect.utility.ChatUtils;
 import net.coreprotect.utility.Color;
 import net.coreprotect.utility.ItemUtils;
+import net.coreprotect.utility.LookupComponentUtils;
 import net.coreprotect.utility.MaterialUtils;
-import net.coreprotect.utility.StringUtils;
 import net.coreprotect.utility.WorldUtils;
 import net.coreprotect.utility.ErrorReporter;
 
@@ -89,6 +88,7 @@ public class ChestTransactionLookup {
                 int resultRolledBack = results.getInt("rolled_back");
                 byte[] resultMetadata = results.getBytes("metadata");
                 String tooltip = ItemUtils.getEnchantments(resultMetadata, resultType, resultAmount);
+                Integer itemId = ItemUtils.makeGivableItem(ItemUtils.getItemStack(resultMetadata, resultType, resultAmount));
 
                 if (ConfigHandler.playerIdCacheReversed.get(resultUserId) == null) {
                     UserStatement.loadName(statement.getConnection(), resultUserId);
@@ -119,7 +119,12 @@ public class ChestTransactionLookup {
                     target = target.split(":")[1];
                 }
 
-                result.add(new StringBuilder(timeAgo + " " + tag + " " + Phrase.build(Phrase.LOOKUP_CONTAINER, Color.DARK_AQUA + rbFormat + resultUser + Color.WHITE + rbFormat, "x" + resultAmount, ChatUtils.createTooltip(Color.DARK_AQUA + rbFormat + target, tooltip) + Color.WHITE, selector)).toString());
+                String copyableUser = LookupComponentUtils.createCopyableUser(resultUser, rbFormat);
+                String translationKey = LookupComponentUtils.getMaterialTranslationKey(MaterialUtils.getType(resultType));
+                String translatedTarget = LookupComponentUtils.createTranslatableTarget(translationKey, target, rbFormat, tooltip);
+                String giveComponent = ChatUtils.filterComponent(commandSender.hasPermission("coreprotect.give"), ChatUtils.createGiveItemComponent(Color.GREY + "(↓)", command, itemId));
+
+                result.add(new StringBuilder(timeAgo + " " + tag + " " + Phrase.build(Phrase.LOOKUP_CONTAINER, copyableUser, "x" + resultAmount, translatedTarget + giveComponent + Color.WHITE, selector)).toString());
                 PluginChannelListener.getInstance().sendData(commandSender, resultTime, Phrase.LOOKUP_CONTAINER, selector, resultUser, target, resultAmount, x, y, z, worldId, rbFormat, true, tag.contains("+"));
             }
             results.close();
@@ -149,5 +154,4 @@ public class ChestTransactionLookup {
 
         return result;
     }
-
 }

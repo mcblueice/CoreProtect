@@ -21,6 +21,7 @@ import net.md_5.bungee.api.chat.BaseComponent;
 import net.md_5.bungee.api.chat.ClickEvent;
 import net.md_5.bungee.api.chat.HoverEvent;
 import net.md_5.bungee.api.chat.TextComponent;
+import net.md_5.bungee.api.chat.TranslatableComponent;
 import net.md_5.bungee.api.chat.hover.content.Text;
 
 public class SpigotHandler extends SpigotAdapter implements SpigotInterface {
@@ -35,8 +36,10 @@ public class SpigotHandler extends SpigotAdapter implements SpigotInterface {
     public void addHoverComponent(Object message, String[] data) {
         try {
             if (Config.getGlobal().HOVER_EVENTS) {
-                String tooltipText = data[1]; // text displayed inside tooltip
-                TextComponent component = new TextComponent(TextComponent.fromLegacyText(data[2]));
+                String tooltipText = data.length > 1 ? processComponent(data[1]) : ""; // text displayed inside tooltip
+                String displayText = data.length > 2 ? processComponent(data[2]) : "";
+                String copyText = data.length > 3 ? processComponent(data[3]) : "";
+                TextComponent component = new TextComponent(TextComponent.fromLegacyText(displayText));
                 // BaseComponent[] displayComponent = TextComponent.fromLegacyText(processComponent(tooltipText));
 
                 if (tooltipText.contains(Color.MAGIC)) {
@@ -74,7 +77,15 @@ public class SpigotHandler extends SpigotAdapter implements SpigotInterface {
                 }
 
                 BaseComponent[] displayComponent = TextComponent.fromLegacyText(processComponent(tooltipText));
-                component.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(displayComponent)));
+                component.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(normalizeHoverComponents(displayComponent))));
+                if (!copyText.isEmpty()) {
+                    try {
+                        ClickEvent.Action copyAction = ClickEvent.Action.valueOf("COPY_TO_CLIPBOARD");
+                        component.setClickEvent(new ClickEvent(copyAction, copyText));
+                    }
+                    catch (IllegalArgumentException ignored) {
+                    }
+                }
                 ((TextComponent) message).addExtra(component);
             }
             else {
@@ -89,7 +100,8 @@ public class SpigotHandler extends SpigotAdapter implements SpigotInterface {
     @Override
     public void setHoverEvent(Object component, String text) {
         if (Config.getGlobal().HOVER_EVENTS) {
-            ((TextComponent) component).setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(TextComponent.fromLegacyText(text))));
+            BaseComponent[] hover = TextComponent.fromLegacyText(text);
+            ((TextComponent) component).setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(normalizeHoverComponents(hover))));
         }
     }
 
@@ -110,7 +122,7 @@ public class SpigotHandler extends SpigotAdapter implements SpigotInterface {
                     addBuilder(message, builder);
                 }
 
-                String[] data = value.split("\\|", 3);
+                String[] data = value.split("\\|", -1);
                 if (data[0].equals(Chat.COMPONENT_COMMAND)) {
                     TextComponent component = new TextComponent(TextComponent.fromLegacyText(data[2]));
                     component.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, data[1]));
@@ -119,6 +131,31 @@ public class SpigotHandler extends SpigotAdapter implements SpigotInterface {
                 }
                 else if (data[0].equals(Chat.COMPONENT_POPUP)) {
                     SpigotAdapter.ADAPTER.addHoverComponent(message, data);
+                }
+                else if (data[0].equals(Chat.COMPONENT_TRANSLATE)) {
+                    String translationKey = data.length > 1 ? processComponent(data[1]) : "";
+                    String fallback = data.length > 2 ? processComponent(data[2]) : translationKey;
+                    String hoverText = data.length > 3 ? processComponent(data[3]) : "";
+                    boolean strikethrough = data.length > 4 && "1".equals(data[4]);
+
+                    if (translationKey.isEmpty()) {
+                        TextComponent fallbackComponent = new TextComponent(TextComponent.fromLegacyText(fallback));
+                        if (!hoverText.isEmpty()) {
+                            BaseComponent[] hover = TextComponent.fromLegacyText(processComponent(hoverText));
+                            fallbackComponent.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(normalizeHoverComponents(hover))));
+                        }
+                        message.addExtra(fallbackComponent);
+                    }
+                    else {
+                        TranslatableComponent translated = new TranslatableComponent(translationKey);
+                        translated.setColor(SpigotHandler.DARK_AQUA);
+                        translated.setStrikethrough(strikethrough);
+                        if (!hoverText.isEmpty()) {
+                            BaseComponent[] hover = TextComponent.fromLegacyText(hoverText);
+                            translated.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(normalizeHoverComponents(hover))));
+                        }
+                        message.addExtra(translated);
+                    }
                 }
             }
             else {
@@ -203,6 +240,21 @@ public class SpigotHandler extends SpigotAdapter implements SpigotInterface {
         catch (Exception e) {
             return null;
         }
+    }
+
+    private static BaseComponent[] normalizeHoverComponents(BaseComponent[] components) {
+        TextComponent root = new TextComponent();
+        root.setBold(false);
+        root.setItalic(false);
+        root.setUnderlined(false);
+        root.setStrikethrough(false);
+        root.setObfuscated(false);
+
+        for (BaseComponent component : components) {
+            root.addExtra(component);
+        }
+
+        return new BaseComponent[] { root };
     }
 
     @SuppressWarnings({ "unchecked", "rawtypes" })

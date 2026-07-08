@@ -14,6 +14,7 @@ import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
+import org.bukkit.entity.EntityType;
 
 import com.google.common.base.Strings;
 
@@ -34,6 +35,7 @@ import net.coreprotect.utility.ChatUtils;
 import net.coreprotect.utility.Color;
 import net.coreprotect.utility.EntityUtils;
 import net.coreprotect.utility.ItemUtils;
+import net.coreprotect.utility.LookupComponentUtils;
 import net.coreprotect.utility.MaterialUtils;
 import net.coreprotect.utility.StringUtils;
 import net.coreprotect.utility.WorldUtils;
@@ -205,7 +207,8 @@ public class StandardLookupThread implements Runnable {
                                 String dplayer = data[1];
                                 String message = data[2];
                                 String timeago = ChatUtils.getTimeSince(Integer.parseInt(time), unixtimestamp, true);
-                                Chat.sendComponent(player, timeago + " " + Color.WHITE + "- " + Color.DARK_AQUA + dplayer + ": " + Color.WHITE, message);
+                                String copyablePlayer = ChatUtils.createCopyableText(Color.DARK_AQUA + dplayer + Color.WHITE, dplayer, Color.GREY + dplayer);
+                                Chat.sendComponent(player, timeago + " " + Color.WHITE + "- " + copyablePlayer + ": " + Color.WHITE, message);
                                 if (PluginChannelHandshakeListener.getInstance().isPluginChannelPlayer(player)) {
                                     int wid = Integer.parseInt(data[3]);
                                     int dataX = Integer.parseInt(data[4]);
@@ -235,7 +238,8 @@ public class StandardLookupThread implements Runnable {
                                 }
 
                                 String tag = (action != SessionActions.LOGOUT ? Color.GREEN + "+" : Color.RED + "-");
-                                Chat.sendComponent(player, timeago + " " + tag + " " + Color.DARK_AQUA + Phrase.build(Phrase.LOOKUP_LOGIN, Color.DARK_AQUA + dplayer + Color.WHITE, (action != SessionActions.LOGOUT ? Selector.FIRST : Selector.SECOND)));
+                                String copyablePlayer = ChatUtils.createCopyableText(Color.DARK_AQUA + dplayer + Color.WHITE, dplayer, Color.GREY + dplayer);
+                                Chat.sendComponent(player, timeago + " " + tag + " " + Color.DARK_AQUA + Phrase.build(Phrase.LOOKUP_LOGIN, copyablePlayer, (action != SessionActions.LOGOUT ? Selector.FIRST : Selector.SECOND)));
                                 Chat.sendComponent(player, Color.WHITE + leftPadding + Color.GREY + "^ " + ChatUtils.getCoordinates(command.getName(), wid, dataX, dataY, dataZ, true, true) + "");
                                 PluginChannelListener.getInstance().sendInfoData(player, Integer.parseInt(time), Phrase.LOOKUP_LOGIN, (action != SessionActions.LOGOUT ? Selector.FIRST : Selector.SECOND), dplayer, -1, dataX, dataY, dataZ, wid);
                             }
@@ -246,7 +250,8 @@ public class StandardLookupThread implements Runnable {
                                 String user = ConfigHandler.uuidCacheReversed.get(data[1]);
                                 String username = data[2];
                                 String timeago = ChatUtils.getTimeSince(Integer.parseInt(time), unixtimestamp, true);
-                                Chat.sendComponent(player, timeago + " " + Color.WHITE + "- " + Phrase.build(Phrase.LOOKUP_USERNAME, Color.DARK_AQUA + user + Color.WHITE, Color.DARK_AQUA + username + Color.WHITE));
+                                String copyableUser = ChatUtils.createCopyableText(Color.DARK_AQUA + user + Color.WHITE, user, Color.GREY + user);
+                                Chat.sendComponent(player, timeago + " " + Color.WHITE + "- " + Phrase.build(Phrase.LOOKUP_USERNAME, copyableUser, Color.DARK_AQUA + username + Color.WHITE));
                                 PluginChannelListener.getInstance().sendUsernameData(player, Integer.parseInt(time), user, username);
                             }
                         }
@@ -269,7 +274,8 @@ public class StandardLookupThread implements Runnable {
                                     leftPadding = leftPadding + Color.WHITE + Strings.padStart("", (timeLength - 50) / 4, ' ');
                                 }
 
-                                Chat.sendComponent(player, timeago + " " + Color.WHITE + "- " + Color.DARK_AQUA + dplayer + ": " + Color.WHITE, message);
+                                String copyablePlayer = ChatUtils.createCopyableText(Color.DARK_AQUA + dplayer + Color.WHITE, dplayer, Color.GREY + dplayer);
+                                Chat.sendComponent(player, timeago + " " + Color.WHITE + "- " + copyablePlayer + ": " + Color.WHITE, message);
                                 Chat.sendComponent(player, Color.WHITE + leftPadding + Color.GREY + "^ " + ChatUtils.getCoordinates(command.getName(), wid, dataX, dataY, dataZ, true, true) + "");
                                 PluginChannelListener.getInstance().sendMessageData(player, Integer.parseInt(time), dplayer, message, true, dataX, dataY, dataZ, wid);
                             }
@@ -293,6 +299,9 @@ public class StandardLookupThread implements Runnable {
                                 byte[] metadata = data[11] == null ? null : data[11].getBytes(StandardCharsets.ISO_8859_1);
                                 String tooltip = ItemUtils.getEnchantments(metadata, dtype, amount);
                                 Integer itemId = ItemUtils.makeGivableItem(ItemUtils.getItemStack(metadata, dtype, amount));
+                                String itemTranslationKey = LookupComponentUtils.getMaterialTranslationKey(blockType);
+                                String translatedItemName = ChatUtils.createTranslatableComponent(itemTranslationKey, Color.DARK_AQUA + rbd + dname + Color.WHITE, tooltip, !rbd.isEmpty());
+                                String copyablePlayer = ChatUtils.createCopyableText(Color.DARK_AQUA + rbd + dplayer + Color.WHITE + rbd, dplayer, Color.GREY + dplayer);
 
                                 String selector = Selector.FIRST;
                                 String tag = Color.WHITE + "-";
@@ -321,7 +330,7 @@ public class StandardLookupThread implements Runnable {
                                     tag = (daction == ItemTransactionActions.REMOVE ? Color.GREEN + "+" : Color.RED + "-");
                                 }
 
-                                Chat.sendComponent(player, timeago + " " + tag + " " + Phrase.build(Phrase.LOOKUP_CONTAINER, Color.DARK_AQUA + rbd + dplayer + Color.WHITE + rbd, "x" + amount, ChatUtils.createTooltip(Color.DARK_AQUA + rbd + dname, tooltip) + ChatUtils.filterComponent(player.hasPermission("coreprotect.give"), ChatUtils.createGiveItemComponent(Color.GREY + "(↓)", command.getName(), itemId)) + Color.WHITE, selector));
+                                Chat.sendComponent(player, timeago + " " + tag + " " + Phrase.build(Phrase.LOOKUP_CONTAINER, copyablePlayer, "x" + amount, translatedItemName + ChatUtils.filterComponent(player.hasPermission("coreprotect.give"), ChatUtils.createGiveItemComponent(Color.GREY + "(↓)", command.getName(), itemId)) + Color.WHITE, selector));
                                 PluginChannelListener.getInstance().sendData(player, Integer.parseInt(time), Phrase.LOOKUP_CONTAINER, selector, dplayer, dname, amount, dataX, dataY, dataZ, wid, rbd, true, tag.contains("+"));
                             }
                         }
@@ -387,10 +396,14 @@ public class StandardLookupThread implements Runnable {
                                 Phrase phrase = Phrase.LOOKUP_BLOCK;
                                 String selector = Selector.FIRST;
                                 String action = "a:block";
+                                Material displayMaterial = null;
+                                EntityType displayEntityType = null;
+                                String copyablePlayer = ChatUtils.createCopyableText(Color.DARK_AQUA + rbd + dplayer + Color.WHITE + rbd, dplayer, Color.GREY + dplayer);
                                 if (actions.contains(LookupActions.CONTAINER) || actions.contains(5) || actions.contains(LookupActions.ITEM) || amount > -1) {
                                     byte[] metadata = data[11] == null ? null : data[11].getBytes(StandardCharsets.ISO_8859_1);
                                     String tooltip = ItemUtils.getEnchantments(metadata, dtype, amount);
                                     Integer itemId = ItemUtils.makeGivableItem(ItemUtils.getItemStack(metadata, dtype, amount));
+                                    displayMaterial = ItemUtils.itemFilter(MaterialUtils.getType(dtype), (Integer.parseInt(data[13]) == 0));
 
                                     if (daction == ItemTransactionActions.DROP || daction == ItemTransactionActions.PICKUP) {
                                         phrase = Phrase.LOOKUP_ITEM; // {picked up|dropped}
@@ -417,7 +430,9 @@ public class StandardLookupThread implements Runnable {
                                         action = "a:container";
                                     }
 
-                                    Chat.sendComponent(player, timeago + " " + tag + " " + Phrase.build(phrase, Color.DARK_AQUA + rbd + dplayer + Color.WHITE + rbd, "x" + amount, ChatUtils.createTooltip(Color.DARK_AQUA + rbd + dname, tooltip) + ChatUtils.filterComponent(player.hasPermission("coreprotect.give"), ChatUtils.createGiveItemComponent(Color.GREY + "(↓)", command.getName(), itemId)) + Color.WHITE, selector));
+                                    String translationKey = LookupComponentUtils.getMaterialTranslationKey(displayMaterial);
+                                    String translatedName = ChatUtils.createTranslatableComponent(translationKey, Color.DARK_AQUA + rbd + dname + Color.WHITE, tooltip, !rbd.isEmpty());
+                                    Chat.sendComponent(player, timeago + " " + tag + " " + Phrase.build(phrase, copyablePlayer, "x" + amount, translatedName + ChatUtils.filterComponent(player.hasPermission("coreprotect.give"), ChatUtils.createGiveItemComponent(Color.GREY + "(↓)", command.getName(), itemId)) + Color.WHITE, selector));
                                     PluginChannelListener.getInstance().sendData(player, Integer.parseInt(time), phrase, selector, dplayer, dname, (tag.contains("+") ? 1 : -1), dataX, dataY, dataZ, wid, rbd, action.contains("container"), tag.contains("+"));
                                 }
                                 else {
@@ -426,14 +441,24 @@ public class StandardLookupThread implements Runnable {
                                         selector = (daction != LookupActions.ENTITY_KILL ? Selector.FIRST : Selector.SECOND);
                                         tag = (daction != LookupActions.ENTITY_KILL ? Color.WHITE + "-" : Color.RED + "-");
                                         action = (daction == LookupActions.INTERACTION ? "a:click" : "a:kill");
+                                        if (daction == LookupActions.ENTITY_KILL && !isPlayer) {
+                                            displayEntityType = EntityUtils.getEntityType(dtype);
+                                        }
+                                        else {
+                                            displayMaterial = MaterialUtils.getType(dtype);
+                                        }
                                     }
                                     else {
                                         phrase = Phrase.LOOKUP_BLOCK; // {placed|broke}
                                         selector = (daction != LookupActions.BLOCK_BREAK ? Selector.FIRST : Selector.SECOND);
                                         tag = (daction != LookupActions.BLOCK_BREAK ? Color.GREEN + "+" : Color.RED + "-");
+                                        displayMaterial = MaterialUtils.getType(dtype);
                                     }
 
-                                    Chat.sendComponent(player, timeago + " " + tag + " " + Phrase.build(phrase, Color.DARK_AQUA + rbd + dplayer + Color.WHITE + rbd, Color.DARK_AQUA + rbd + dname + Color.WHITE, selector));
+                                    String translationKey = displayEntityType != null ? LookupComponentUtils.getEntityTranslationKey(displayEntityType) : LookupComponentUtils.getMaterialTranslationKey(displayMaterial);
+                                    String hover = Color.DARK_AQUA + rbd + dname + Color.WHITE;
+                                    String translatedName = ChatUtils.createTranslatableComponent(translationKey, Color.DARK_AQUA + rbd + dname + Color.WHITE, hover, !rbd.isEmpty());
+                                    Chat.sendComponent(player, timeago + " " + tag + " " + Phrase.build(phrase, copyablePlayer, translatedName, selector));
                                     PluginChannelListener.getInstance().sendData(player, Integer.parseInt(time), phrase, selector, dplayer, dname, (tag.contains("+") ? 1 : -1), dataX, dataY, dataZ, wid, rbd, false, tag.contains("+"));
                                 }
 
@@ -471,4 +496,5 @@ public class StandardLookupThread implements Runnable {
 
         ConfigHandler.lookupThrottle.put(player.getName(), new Object[] { false, System.currentTimeMillis() });
     }
+
 }

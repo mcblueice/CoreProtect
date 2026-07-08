@@ -162,8 +162,7 @@ public class ChatUtils {
         if (component) {
             Date logDate = new Date(resultTime * 1000L);
             String formattedTimestamp = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss z").format(logDate);
-
-            return Chat.COMPONENT_TAG_OPEN + Chat.COMPONENT_POPUP + "|" + Color.GREY + formattedTimestamp + "|" + Color.GREY + message.toString() + Chat.COMPONENT_TAG_CLOSE;
+            return createPopupComponent(Color.GREY + formattedTimestamp, Color.GREY + message.toString(), formattedTimestamp);
         }
 
         return message.toString();
@@ -174,14 +173,23 @@ public class ChatUtils {
             return phrase;
         }
 
-        StringBuilder message = new StringBuilder(Chat.COMPONENT_TAG_OPEN + Chat.COMPONENT_POPUP);
+        return createPopupComponent(tooltip, phrase, null);
+    }
 
-        // tooltip
-        message.append("|" + tooltip.replace("|", Chat.COMPONENT_PIPE) + "|");
+    public static String createCopyableText(String phrase, String copyValue, String hover) {
+        return createPopupComponent(hover, phrase, copyValue);
+    }
 
-        // chat output
-        message.append(phrase);
+    public static String createTranslatableComponent(String translationKey, String fallback, String tooltip, boolean strikethrough) {
+        if (translationKey == null || translationKey.isEmpty()) {
+            return createTooltip(fallback, tooltip);
+        }
 
+        StringBuilder message = new StringBuilder(Chat.COMPONENT_TAG_OPEN + Chat.COMPONENT_TRANSLATE);
+        message.append("|").append(escapeComponentData(translationKey));
+        message.append("|").append(escapeComponentData(fallback));
+        message.append("|").append(escapeComponentData(tooltip));
+        message.append("|").append(strikethrough ? "1" : "0");
         return message.append(Chat.COMPONENT_TAG_CLOSE).toString();
     }
 
@@ -200,5 +208,24 @@ public class ChatUtils {
 
     public static String filterComponent(boolean condition, String component) {
         return condition ? component : "";
+    }
+
+    private static String escapeComponentData(String value) {
+        if (value == null) {
+            return "";
+        }
+
+        return value.replace("|", Chat.COMPONENT_PIPE);
+    }
+
+    private static String createPopupComponent(String tooltip, String phrase, String copyValue) {
+        StringBuilder message = new StringBuilder(Chat.COMPONENT_TAG_OPEN + Chat.COMPONENT_POPUP);
+        message.append("|").append(escapeComponentData(tooltip)).append("|");
+        message.append(escapeComponentData(phrase));
+        if (copyValue != null && !copyValue.isEmpty()) {
+            message.append("|").append(escapeComponentData(copyValue));
+        }
+
+        return message.append(Chat.COMPONENT_TAG_CLOSE).toString();
     }
 } 

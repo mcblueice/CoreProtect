@@ -7,7 +7,6 @@ import net.coreprotect.language.Selector;
 import net.coreprotect.listener.channel.PluginChannelListener;
 import net.coreprotect.utility.*;
 import net.coreprotect.utility.ErrorReporter;
-import org.bukkit.Material;
 import org.bukkit.block.BlockState;
 import org.bukkit.command.CommandSender;
 
@@ -127,7 +126,17 @@ public class BlockLookup {
                     target = target.split(":")[1];
                 }
 
-                resultTextBuilder.append(timeAgo + " " + tag + " ").append(Phrase.build(phrase, Color.DARK_AQUA + rbFormat + resultUser + Color.WHITE + rbFormat, Color.DARK_AQUA + rbFormat + target + Color.WHITE, selector)).append("\n");
+                String copyableUser = LookupComponentUtils.createCopyableUser(resultUser, rbFormat);
+                String translationKey = "";
+                if (resultAction == 3) {
+                    translationKey = LookupComponentUtils.getEntityTranslationKey(EntityUtils.getEntityType(resultType));
+                }
+                else {
+                    translationKey = LookupComponentUtils.getMaterialTranslationKey(MaterialUtils.getType(resultType));
+                }
+                String translatedTarget = LookupComponentUtils.createTranslatableTarget(translationKey, target, rbFormat, Color.DARK_AQUA + rbFormat + target + Color.WHITE);
+
+                resultTextBuilder.append(timeAgo + " " + tag + " ").append(Phrase.build(phrase, copyableUser, translatedTarget, selector)).append("\n");
                 PluginChannelListener.getInstance().sendData(commandSender, resultTime, phrase, selector, resultUser, target, -1, x, y, z, worldId, rbFormat, false, tag.contains("+"));
             }
 

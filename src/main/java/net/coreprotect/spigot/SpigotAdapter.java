@@ -70,9 +70,12 @@ public class SpigotAdapter implements SpigotInterface {
         while (matcher.find()) {
             String value = matcher.group(1);
             if (value != null) {
-                String[] data = value.split("\\|", 3);
+                String[] data = value.split("\\|", -1);
                 if (data[0].equals(Chat.COMPONENT_COMMAND) || data[0].equals(Chat.COMPONENT_POPUP)) {
-                    message.append(data[2]);
+                    message.append(data.length > 2 ? data[2] : "");
+                }
+                else if (data[0].equals(Chat.COMPONENT_TRANSLATE)) {
+                    message.append(data.length > 2 ? processComponent(data[2]) : "");
                 }
             }
             else {
