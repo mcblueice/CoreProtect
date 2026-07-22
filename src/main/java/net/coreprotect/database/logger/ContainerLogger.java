@@ -27,6 +27,7 @@ import net.coreprotect.model.entity.EntitySpawnIdentity;
 import net.coreprotect.model.item.ItemTransactionActions;
 import net.coreprotect.thread.CacheHandler;
 import net.coreprotect.utility.BlockUtils;
+import net.coreprotect.utility.ErrorReporter;
 import net.coreprotect.utility.HopperTransactionUtils;
 import net.coreprotect.utility.ItemUtils;
 import net.coreprotect.utility.MaterialUtils;
@@ -44,6 +45,11 @@ public class ContainerLogger extends Queue {
     }
 
     public static void log(ConsumerWriteBatch preparedStmtContainer, ConsumerWriteBatch preparedStmtItems, int batchCount, String player, Material type, Object container, Location location) {
+        String loggingContainerId = null;
+        String transactingChestId = null;
+        List<ItemStack[]> oldList = null;
+        boolean snapshotConsumed = false; // 追蹤快照是否已被正常消耗
+
         try {
             ItemStack[] contents = null;
             String faceData = null;
@@ -69,9 +75,9 @@ public class ContainerLogger extends Queue {
                 return;
             }
 
-            String loggingContainerId = HopperTransactionUtils.getLoggingId(player, location);
-            String transactingChestId = HopperTransactionUtils.getTransactionId(location);
-            List<ItemStack[]> oldList = ConfigHandler.oldContainer.get(loggingContainerId);
+            loggingContainerId = HopperTransactionUtils.getLoggingId(player, location);
+            transactingChestId = HopperTransactionUtils.getTransactionId(location);
+            oldList = ConfigHandler.oldContainer.get(loggingContainerId);
             if (oldList == null || oldList.isEmpty()) {
                 return;
             }
@@ -110,6 +116,7 @@ public class ContainerLogger extends Queue {
                 oldList.remove(0);
                 ConfigHandler.oldContainer.put(loggingContainerId, oldList);
                 HopperTransactionUtils.consumeSnapshot(transactingChestId, loggingContainerId);
+                snapshotConsumed = true;
                 return;
             }
 
@@ -153,6 +160,7 @@ public class ContainerLogger extends Queue {
                     ConfigHandler.hopperSuccess.remove(hopperPush);
                     ConfigHandler.hopperAbort.remove(hopperPush);
                 }
+                snapshotConsumed = true;
                 return;
             }
 
@@ -175,9 +183,26 @@ public class ContainerLogger extends Queue {
             oldList.remove(0);
             ConfigHandler.oldContainer.put(loggingContainerId, oldList);
             HopperTransactionUtils.consumeSnapshot(transactingChestId, loggingContainerId);
+            snapshotConsumed = true;
         }
         catch (Exception e) {
             Database.handleWriteFailure(e);
+        }
+        finally {
+            // 保證任何 Exception 或 Early Return 都會觸發資源釋放
+            if (!snapshotConsumed && oldList != null && loggingContainerId != null && transactingChestId != null) {
+                try {
+                    String locationSuffix = HopperTransactionUtils.getLoggingIdSuffix(location);
+                    ConfigHandler.oldContainer.remove(loggingContainerId);
+                    ConfigHandler.removeOldContainerViewer(locationSuffix, loggingContainerId);
+                    ConfigHandler.loggingChest.remove(loggingContainerId);
+                    Queue.removeForceContainer(loggingContainerId);
+                    HopperTransactionUtils.removeOwner(transactingChestId, loggingContainerId);
+                }
+                catch (Exception cleanupException) {
+                    ErrorReporter.report(cleanupException);
+                }
+            }
         }
     }
 

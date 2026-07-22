@@ -91,6 +91,9 @@ class ContainerTransactionProcess {
                                     Object[] lastAbort = ConfigHandler.hopperAbort.get(hopperPush);
                                     ConfigHandler.hopperAbort.put(hopperPush, HopperTransactionUtils.createAbortState(lastAbort, destinationContents, movedItem));
                                 }
+
+                                // 強制釋放此異常佇列的快照資源
+                                clearContainerTransaction(transactingChestId, loggingChestIdSuffix, loggingChestId);
                             }
                         }
                     }

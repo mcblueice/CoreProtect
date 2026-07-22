@@ -534,6 +534,22 @@ public final class CopperGolemChestListener implements Listener {
             Queue.removeForceContainer(loggingContainerId);
         }
 
+        // 寫入 forceContainer 的同時，確保 oldContainer 也同步初始化佔位，防範孤兒資料產生
+        if (!hasPendingBaseline) {
+            List<ItemStack[]> placeholderList = new java.util.ArrayList<>();
+            placeholderList.add(snapshot);
+            ConfigHandler.oldContainer.put(loggingContainerId, placeholderList);
+            ConfigHandler.addOldContainerViewer(
+                HopperTransactionUtils.getLoggingIdSuffix(location),
+                loggingContainerId
+            );
+            HopperTransactionUtils.registerSnapshot(
+                HopperTransactionUtils.getTransactionId(location),
+                loggingContainerId,
+                true
+            );
+        }
+
         Queue.addForceContainer(loggingContainerId, snapshot);
     }
 
