@@ -523,34 +523,32 @@ public final class CopperGolemChestListener implements Listener {
         }
 
         String loggingContainerId = HopperTransactionUtils.getLoggingId(USERNAME, location);
+        String transactionId = HopperTransactionUtils.getTransactionId(location);
+        HopperTransactionUtils.synchronizeTransaction(transactionId, () -> {
+            List<ItemStack[]> oldList = ConfigHandler.oldContainer.get(loggingContainerId);
+            boolean hasPendingBaseline = oldList != null && !oldList.isEmpty();
 
-        List<ItemStack[]> oldList = ConfigHandler.oldContainer.get(loggingContainerId);
-        boolean hasPendingBaseline = oldList != null && !oldList.isEmpty();
+            ItemStack[] oldestSnapshot = Queue.peekForceContainer(loggingContainerId);
+            boolean hasStaleForceSnapshots = oldestSnapshot != null && oldestSnapshot.length != snapshot.length;
 
-        ItemStack[] oldestSnapshot = Queue.peekForceContainer(loggingContainerId);
-        boolean hasStaleForceSnapshots = oldestSnapshot != null && oldestSnapshot.length != snapshot.length;
+            if (!hasPendingBaseline || hasStaleForceSnapshots) {
+                Queue.removeForceContainer(loggingContainerId);
+            }
 
-        if (!hasPendingBaseline || hasStaleForceSnapshots) {
-            Queue.removeForceContainer(loggingContainerId);
-        }
+            // 寫入 forceContainer 的同時，確保 oldContainer 也同步初始化佔位，防範孤兒資料產生
+            if (!hasPendingBaseline) {
+                List<ItemStack[]> placeholderList = new java.util.ArrayList<>();
+                placeholderList.add(snapshot);
+                ConfigHandler.oldContainer.put(loggingContainerId, placeholderList);
+                ConfigHandler.addOldContainerViewer(
+                    HopperTransactionUtils.getLoggingIdSuffix(location),
+                    loggingContainerId
+                );
+                HopperTransactionUtils.registerSnapshot(transactionId, loggingContainerId, true);
+            }
 
-        // 寫入 forceContainer 的同時，確保 oldContainer 也同步初始化佔位，防範孤兒資料產生
-        if (!hasPendingBaseline) {
-            List<ItemStack[]> placeholderList = new java.util.ArrayList<>();
-            placeholderList.add(snapshot);
-            ConfigHandler.oldContainer.put(loggingContainerId, placeholderList);
-            ConfigHandler.addOldContainerViewer(
-                HopperTransactionUtils.getLoggingIdSuffix(location),
-                loggingContainerId
-            );
-            HopperTransactionUtils.registerSnapshot(
-                HopperTransactionUtils.getTransactionId(location),
-                loggingContainerId,
-                true
-            );
-        }
-
-        Queue.addForceContainer(loggingContainerId, snapshot);
+            Queue.addForceContainer(loggingContainerId, snapshot);
+        });
     }
 
     private void cleanupOpenInteractions(long nowMillis) {
