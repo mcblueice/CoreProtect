@@ -80,6 +80,7 @@ public class Config extends Language {
     public boolean FIRE_EXTINGUISH;
     public boolean EXPLOSIONS;
     public boolean ENTITY_CHANGE;
+    public boolean WITHER_IGNORE_COBBLESTONE;
     public boolean ENTITY_KILLS;
     public boolean ENTITY_SPAWNS;
     public boolean SIGN_TEXT;
@@ -150,6 +151,7 @@ public class Config extends Language {
         DEFAULT_VALUES.put("fire-extinguish", "false");
         DEFAULT_VALUES.put("explosions", "true");
         DEFAULT_VALUES.put("entity-change", "true");
+        DEFAULT_VALUES.put("wither-ignore-cobblestone", "false");
         DEFAULT_VALUES.put("entity-kills", "true");
         DEFAULT_VALUES.put("entity-spawns", "true");
         DEFAULT_VALUES.put("sign-text", "true");
@@ -200,6 +202,7 @@ public class Config extends Language {
         HEADERS.put("fire-extinguish", new String[] { "# Logs when fire naturally extinguishes." });
         HEADERS.put("explosions", new String[] { "# Logs explosions, such as TNT and Creepers." });
         HEADERS.put("entity-change", new String[] { "# Track when an entity changes a block, such as an Enderman destroying blocks." });
+        HEADERS.put("wither-ignore-cobblestone", new String[] { "# If enabled, wither breaking/exploding cobblestone will not be logged." });
         HEADERS.put("entity-kills", new String[] { "# Logs killed entities, such as killed cows and enderman." });
         HEADERS.put("entity-spawns", new String[] { "# Logs entities placed or spawned by players, such as boats and spawn-egg mobs." });
         HEADERS.put("sign-text", new String[] { "# Logs text on signs. If disabled, signs will be blank when rolled back." });
@@ -277,6 +280,7 @@ public class Config extends Language {
         this.FIRE_EXTINGUISH = this.getBoolean("fire-extinguish");
         this.EXPLOSIONS = this.getBoolean("explosions");
         this.ENTITY_CHANGE = this.getBoolean("entity-change");
+        this.WITHER_IGNORE_COBBLESTONE = this.getBoolean("wither-ignore-cobblestone");
         this.ENTITY_KILLS = this.getBoolean("entity-kills");
         this.ENTITY_SPAWNS = this.getBoolean("entity-spawns");
         this.SIGN_TEXT = this.getBoolean("sign-text");

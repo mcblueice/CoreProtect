@@ -91,6 +91,7 @@ public final class BlockExplodeListener extends Queue implements Listener {
             Block block = entry.getValue();
             Material blockType = block.getType();
             BlockState blockState = block.getState();
+            if (Config.getConfig(world).WITHER_IGNORE_COBBLESTONE && user.equals("#wither") && blockType == Material.COBBLESTONE) continue;
             if (BukkitAdapter.ADAPTER.isSign(blockType) && Config.getConfig(world).SIGN_TEXT) {
                 try {
                     Location location = blockState.getLocation();

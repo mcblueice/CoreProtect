@@ -63,6 +63,7 @@ public final class EntityChangeBlockListener extends Queue implements Listener {
         }
         else if (entity instanceof Wither) {
             e = "#wither";
+            if (config.WITHER_IGNORE_COBBLESTONE && type == Material.COBBLESTONE && (newtype == Material.AIR || newtype == Material.CAVE_AIR)) return;
         }
         else if (entity instanceof Turtle) {
             e = "#turtle";

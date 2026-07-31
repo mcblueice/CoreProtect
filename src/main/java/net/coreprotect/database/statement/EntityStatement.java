@@ -142,7 +142,7 @@ public class EntityStatement {
                     while (resultSet.next()) {
                         List<Object> data = deserializeData(DatabaseUtils.getBytes(resultSet, "data"));
                         if (!data.isEmpty()) {
-                            result.put(resultSet.getInt("rowid"), data);
+                            result.put(resultSet.getInt(1), data);
                         }
                     }
                 }
