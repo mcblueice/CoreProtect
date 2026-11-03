@@ -2,8 +2,12 @@ package net.coreprotect.database;
 
 import java.io.File;
 import java.sql.Connection;
+import java.sql.PreparedStatement;
 import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.sql.Statement;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Properties;
 
 import org.duckdb.DuckDBConnection;
@@ -32,6 +36,7 @@ final class DuckDBDatabase {
         }
 
         Properties properties = new Properties();
+        properties.setProperty("default_block_size", Integer.toString(Database.DUCKDB_BLOCK_SIZE));
         properties.setProperty("memory_limit", ConfigHandler.duckdbMemoryLimit);
         properties.setProperty("threads", Integer.toString(ConfigHandler.duckdbThreads));
         properties.setProperty("temp_directory", databaseFile.getAbsolutePath() + ".tmp");
@@ -41,7 +46,7 @@ final class DuckDBDatabase {
         properties.setProperty("allow_community_extensions", "false");
         properties.setProperty("autoload_known_extensions", "false");
         properties.setProperty("autoinstall_known_extensions", "false");
-        rootConnection = (DuckDBConnection) java.sql.DriverManager.getConnection("jdbc:duckdb:" + databaseFile.getAbsolutePath(), properties);
+        rootConnection = DuckDBNativeSupport.openDatabase(() -> (DuckDBConnection) java.sql.DriverManager.getConnection("jdbc:duckdb:" + databaseFile.getAbsolutePath(), properties));
     }
 
     static synchronized Connection getConnection() throws Exception {
@@ -52,8 +57,13 @@ final class DuckDBDatabase {
     static synchronized void close() throws Exception {
         DuckDBConnection connection = rootConnection;
         rootConnection = null;
-        if (connection != null) {
-            connection.close();
+        try {
+            if (connection != null) {
+                connection.close();
+            }
+        }
+        finally {
+            DuckDBSpatialIndex.reset();
         }
     }
 
@@ -82,12 +92,14 @@ final class DuckDBDatabase {
                 statement.executeUpdate("CREATE TABLE IF NOT EXISTS " + prefix + "material_map (" + rowId(prefix, "material_map") + ", id INTEGER, material VARCHAR)");
                 statement.executeUpdate("CREATE TABLE IF NOT EXISTS " + prefix + "blockdata_map (" + rowId(prefix, "blockdata_map") + ", id INTEGER, data VARCHAR)");
                 statement.executeUpdate("CREATE TABLE IF NOT EXISTS " + prefix + "session (" + rowId(prefix, "session") + ", time INTEGER, \"user\" INTEGER, wid INTEGER, x INTEGER, y INTEGER, z INTEGER, action TINYINT)");
-                statement.executeUpdate("CREATE TABLE IF NOT EXISTS " + prefix + "sign (" + rowId(prefix, "sign") + ", time INTEGER, \"user\" INTEGER, wid INTEGER, x INTEGER, y INTEGER, z INTEGER, action TINYINT, color INTEGER, color_secondary INTEGER, data TINYINT, waxed TINYINT, face TINYINT, line_1 VARCHAR, line_2 VARCHAR, line_3 VARCHAR, line_4 VARCHAR, line_5 VARCHAR, line_6 VARCHAR, line_7 VARCHAR, line_8 VARCHAR)");
+                statement.executeUpdate("CREATE TABLE IF NOT EXISTS " + prefix + "sign (" + rowId(prefix, "sign") + ", time INTEGER, \"user\" INTEGER, wid INTEGER, x INTEGER, y INTEGER, z INTEGER, action TINYINT, color INTEGER, color_secondary INTEGER, data TINYINT, waxed TINYINT, face TINYINT, line_1 VARCHAR, line_2 VARCHAR, line_3 VARCHAR, line_4 VARCHAR, line_5 VARCHAR, line_6 VARCHAR, line_7 VARCHAR, line_8 VARCHAR, rolled_back TINYINT DEFAULT 0)");
                 statement.executeUpdate("CREATE TABLE IF NOT EXISTS " + prefix + "skull (" + rowId(prefix, "skull") + ", time INTEGER, owner VARCHAR, skin VARCHAR)");
                 statement.executeUpdate("CREATE TABLE IF NOT EXISTS " + prefix + "user (" + rowId(prefix, "user") + ", time INTEGER, \"user\" VARCHAR, uuid VARCHAR)");
                 statement.executeUpdate("CREATE TABLE IF NOT EXISTS " + prefix + "username_log (" + rowId(prefix, "username_log") + ", time INTEGER, uuid VARCHAR, \"user\" VARCHAR)");
                 statement.executeUpdate("CREATE TABLE IF NOT EXISTS " + prefix + "version (" + rowId(prefix, "version") + ", time INTEGER, version VARCHAR)");
                 statement.executeUpdate("CREATE TABLE IF NOT EXISTS " + prefix + "world (" + rowId(prefix, "world") + ", id INTEGER, world VARCHAR)");
+                DuckDBSpatialIndex.createTable(prefix, statement);
+                validateEntityDataColumns(connection, prefix);
 
                 if (!purge) {
                     initialize(prefix, statement);
@@ -97,6 +109,29 @@ final class DuckDBDatabase {
         finally {
             if (forceConnection == null) {
                 connection.close();
+            }
+        }
+    }
+
+    private static void validateEntityDataColumns(Connection connection, String prefix) throws SQLException {
+        String entityTable = prefix + "entity";
+        String entitySpawnTable = prefix + "entity_spawn";
+        Map<String, String> types = new HashMap<>();
+        String query = "SELECT table_name,data_type FROM information_schema.columns "
+                + "WHERE table_schema=current_schema() AND table_name IN (?,?) AND column_name='data'";
+        try (PreparedStatement statement = connection.prepareStatement(query)) {
+            statement.setString(1, entityTable);
+            statement.setString(2, entitySpawnTable);
+            try (ResultSet resultSet = statement.executeQuery()) {
+                while (resultSet.next()) {
+                    types.put(resultSet.getString(1), resultSet.getString(2));
+                }
+            }
+        }
+        for (String table : new String[] { entityTable, entitySpawnTable }) {
+            String type = types.get(table);
+            if (!"BLOB".equalsIgnoreCase(type)) {
+                throw new SQLException("Unsupported DuckDB " + table + ".data format: " + (type == null ? "missing" : type) + " (expected BLOB)");
             }
         }
     }
