@@ -244,6 +244,10 @@ public class TabHandler implements TabCompleter {
                 arg = split[1];
             }
         }
+        else {
+            filter = "";
+            arg = currentArg;
+        }
 
         List<String> completions = new ArrayList<>(Arrays.asList(ACTIONS));
         for (int index = 0; index < completions.size(); index++) {
