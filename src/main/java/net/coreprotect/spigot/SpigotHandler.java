@@ -11,8 +11,10 @@ import org.bukkit.command.ConsoleCommandSender;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.Villager;
 
+import net.coreprotect.bukkit.BukkitAdapter;
 import net.coreprotect.config.Config;
 import net.coreprotect.model.entity.VillagerReputationData;
+import net.coreprotect.utility.AdapterMethods;
 import net.coreprotect.utility.Chat;
 import net.coreprotect.utility.Color;
 import net.coreprotect.utility.StringUtils;
@@ -28,6 +30,7 @@ import net.md_5.bungee.api.chat.hover.content.Text;
 
 public class SpigotHandler extends SpigotAdapter implements SpigotInterface {
 
+    private static final Class<?> REPUTATION_TYPE = AdapterMethods.findType("org.bukkit.entity.Villager$ReputationType");
     public static ChatColor DARK_AQUA = ChatColor.of("#31b0e8");
 
     public SpigotHandler() {
@@ -37,12 +40,15 @@ public class SpigotHandler extends SpigotAdapter implements SpigotInterface {
     @Override
     public DyeColor getCushionColor(Entity entity) {
         try {
-            Object handle = entity.getClass().getMethod("getHandle").invoke(entity);
-            Object color = handle.getClass().getMethod("getColor").invoke(handle);
-            int id = ((Number) color.getClass().getMethod("getId").invoke(color)).intValue();
-            return DyeColor.getByWoolData((byte) id);
+            Object handle = AdapterMethods.invokeNoArguments(entity, "getHandle");
+            Object color = AdapterMethods.invokeNoArguments(handle, "getColor");
+            Object id = AdapterMethods.invokeNoArguments(color, "getId");
+            if (!(id instanceof Number)) {
+                return null;
+            }
+            return DyeColor.getByWoolData(((Number) id).byteValue());
         }
-        catch (ReflectiveOperationException e) {
+        catch (ReflectiveOperationException | LinkageError e) {
             ErrorReporter.report(e);
             return null;
         }
@@ -50,76 +56,54 @@ public class SpigotHandler extends SpigotAdapter implements SpigotInterface {
 
     @Override
     public void setCushionColor(Entity entity, DyeColor color) {
-        try {
-            Object handle = entity.getClass().getMethod("getHandle").invoke(entity);
-            Class<?> colorClass = handle.getClass().getMethod("getColor").getReturnType();
-            Object value = colorClass.getMethod("byId", int.class).invoke(null, (int) color.getWoolData());
-            handle.getClass().getMethod("setColor", colorClass).invoke(handle, value);
+        if (color == null) {
+            return;
         }
-        catch (ReflectiveOperationException e) {
+        try {
+            Object handle = AdapterMethods.invokeNoArguments(entity, "getHandle");
+            if (handle == null) {
+                return;
+            }
+            Method getter = AdapterMethods.find(handle.getClass(), "getColor");
+            if (getter == null) {
+                return;
+            }
+            Class<?> colorClass = getter.getReturnType();
+            Method resolveColor = AdapterMethods.find(colorClass, "byId", int.class);
+            Method setColor = AdapterMethods.find(handle.getClass(), "setColor", colorClass);
+            if (resolveColor != null && setColor != null) {
+                Object value = resolveColor.invoke(null, (int) color.getWoolData());
+                if (value != null) {
+                    setColor.invoke(handle, value);
+                }
+            }
+        }
+        catch (ReflectiveOperationException | LinkageError e) {
             ErrorReporter.report(e);
         }
     }
 
     @Override
     public void addHoverComponent(Object message, String[] data) {
+        if (data == null || data.length < 3) {
+            return;
+        }
         try {
+            TextComponent component = new TextComponent(TextComponent.fromLegacyText(processComponent(data[2])));
             if (Config.getGlobal().HOVER_EVENTS) {
-                String tooltipText = data.length > 1 ? processComponent(data[1]) : ""; // text displayed inside tooltip
-                String displayText = data.length > 2 ? processComponent(data[2]) : "";
-                String copyText = data.length > 3 ? processComponent(data[3]) : "";
-                TextComponent component = new TextComponent(TextComponent.fromLegacyText(displayText));
-                // BaseComponent[] displayComponent = TextComponent.fromLegacyText(processComponent(tooltipText));
-
-                if (tooltipText.contains(Color.MAGIC)) {
-                    tooltipText = tooltipText.replace(Color.MAGIC, "");
-
-                    // to-do
-                    /*
-                    ComponentBuilder formattedComponent = new ComponentBuilder();
-                    StringBuilder messageTest = new StringBuilder();
-                    String colorChar = String.valueOf(ChatColor.COLOR_CHAR);
-                    boolean isObfuscated = false;
-
-                    String[] tooltip = tooltipText.split(colorChar);
-                    for (String splitText : tooltip) {
-                        boolean setObfuscated = splitText.startsWith("k");
-                        splitText = setObfuscated ? splitText.substring(1) : (splitText.length() > 0 ? colorChar : "") + splitText;
-                        if ((setObfuscated && !isObfuscated) || (!setObfuscated && isObfuscated)) {
-                            formattedComponent.append(TextComponent.fromLegacyText(processComponent(messageTest.toString())));
-                            formattedComponent.obfuscated(false); // setObfuscated
-                            formattedComponent.append(TextComponent.fromLegacyText(processComponent(splitText)));
-                            messageTest.setLength(0);
-                            isObfuscated = !isObfuscated;
-                        }
-                        else {
-                            messageTest.append(splitText);
-                        }
-                    }
-
-                    if (messageTest.length() > 0) {
-                        formattedComponent.append(TextComponent.fromLegacyText(processComponent(messageTest.toString())));
-                    }
-
-                    displayComponent = formattedComponent.create();
-                    */
-                }
-
-                BaseComponent[] displayComponent = TextComponent.fromLegacyText(processComponent(tooltipText));
+                String tooltipText = processComponent(data[1]).replace(Color.MAGIC, "");
+                BaseComponent[] displayComponent = TextComponent.fromLegacyText(tooltipText);
                 component.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(normalizeHoverComponents(displayComponent))));
-                if (!copyText.isEmpty()) {
+                if (data.length > 3 && !data[3].isEmpty()) {
                     try {
                         ClickEvent.Action copyAction = ClickEvent.Action.valueOf("COPY_TO_CLIPBOARD");
-                        component.setClickEvent(new ClickEvent(copyAction, copyText));
+                        component.setClickEvent(new ClickEvent(copyAction, processComponent(data[3])));
                     }
                     catch (IllegalArgumentException ignored) {
                     }
                 }
-                ((TextComponent) message).addExtra(component);
             }
-            else {
-                super.addHoverComponent(message, data);
-            }
+            ((TextComponent) message).addExtra(component);
         }
         catch (Exception e) {
             ErrorReporter.report(e);
@@ -151,40 +135,25 @@ public class SpigotHandler extends SpigotAdapter implements SpigotInterface {
                     addBuilder(message, builder);
                 }
 
-                String[] data = value.split("\\|", -1);
-                if (data[0].equals(Chat.COMPONENT_COMMAND)) {
-                    TextComponent component = new TextComponent(TextComponent.fromLegacyText(data[2]));
-                    component.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, data[1]));
-                    SpigotAdapter.ADAPTER.setHoverEvent(component, StringUtils.hoverCommandFilter(data[1]));
+                String[] data = splitComponent(value);
+                if (data.length < 3) {
+                    builder.append(Chat.COMPONENT_TAG_OPEN).append(value).append(Chat.COMPONENT_TAG_CLOSE);
+                }
+                else if (data[0].equals(Chat.COMPONENT_COMMAND)) {
+                    String command = processComponent(data[1]);
+                    TextComponent component = new TextComponent(TextComponent.fromLegacyText(processComponent(data[2])));
+                    component.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, command));
+                    SpigotAdapter.ADAPTER.setHoverEvent(component, StringUtils.hoverCommandFilter(command));
                     message.addExtra(component);
                 }
                 else if (data[0].equals(Chat.COMPONENT_POPUP)) {
                     SpigotAdapter.ADAPTER.addHoverComponent(message, data);
                 }
                 else if (data[0].equals(Chat.COMPONENT_TRANSLATE)) {
-                    String translationKey = data.length > 1 ? processComponent(data[1]) : "";
-                    String fallback = data.length > 2 ? processComponent(data[2]) : translationKey;
-                    String hoverText = data.length > 3 ? processComponent(data[3]) : "";
-                    boolean strikethrough = data.length > 4 && "1".equals(data[4]);
-
-                    if (translationKey.isEmpty()) {
-                        TextComponent fallbackComponent = new TextComponent(TextComponent.fromLegacyText(fallback));
-                        if (!hoverText.isEmpty()) {
-                            BaseComponent[] hover = TextComponent.fromLegacyText(processComponent(hoverText));
-                            fallbackComponent.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(normalizeHoverComponents(hover))));
-                        }
-                        message.addExtra(fallbackComponent);
-                    }
-                    else {
-                        TranslatableComponent translated = new TranslatableComponent(translationKey);
-                        translated.setColor(SpigotHandler.DARK_AQUA);
-                        translated.setStrikethrough(strikethrough);
-                        if (!hoverText.isEmpty()) {
-                            BaseComponent[] hover = TextComponent.fromLegacyText(hoverText);
-                            translated.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(normalizeHoverComponents(hover))));
-                        }
-                        message.addExtra(translated);
-                    }
+                    addTranslatedComponent(message, data, sender instanceof ConsoleCommandSender);
+                }
+                else {
+                    builder.append(Chat.COMPONENT_TAG_OPEN).append(value).append(Chat.COMPONENT_TAG_CLOSE);
                 }
             }
             else {
@@ -205,9 +174,14 @@ public class SpigotHandler extends SpigotAdapter implements SpigotInterface {
 
     @Override
     public boolean setVillagerReputations(Villager villager, List<?> reputations) {
+        if (REPUTATION_TYPE == null) {
+            return false;
+        }
         try {
-            Class<?> reputationTypeClass = Class.forName("org.bukkit.entity.Villager$ReputationType");
-            Method setReputation = villager.getClass().getMethod("setReputation", UUID.class, reputationTypeClass, int.class);
+            Method setReputation = AdapterMethods.find(villager.getClass(), "setReputation", UUID.class, REPUTATION_TYPE, int.class);
+            if (setReputation == null) {
+                return false;
+            }
 
             for (Object reputationObject : reputations) {
                 VillagerReputationData data = VillagerReputationData.parse(reputationObject);
@@ -216,7 +190,7 @@ public class SpigotHandler extends SpigotAdapter implements SpigotInterface {
                 }
 
                 for (VillagerReputationData.Value value : data.values()) {
-                    Object type = parseEnumValue(reputationTypeClass, value.type());
+                    Object type = BukkitAdapter.getLegacyEnumValue(REPUTATION_TYPE, value.type());
                     if (type != null) {
                         setReputation.invoke(villager, data.uuid(), type, value.amount());
                     }
@@ -225,29 +199,70 @@ public class SpigotHandler extends SpigotAdapter implements SpigotInterface {
 
             return true;
         }
-        catch (Exception e) {
+        catch (ReflectiveOperationException | LinkageError e) {
             return false;
         }
     }
 
     @Override
     public Object getVillagerGossipDecayTime(Villager villager) {
-        return invokeNoArgumentMethod(villager, "getGossipDecayTime");
+        try {
+            return AdapterMethods.invokeNoArguments(villager, "getGossipDecayTime");
+        }
+        catch (ReflectiveOperationException | LinkageError e) {
+            return null;
+        }
     }
 
     @Override
     public void setVillagerGossipDecayTime(Villager villager, Object value) {
         if (value instanceof Number) {
             try {
-                villager.getClass().getMethod("setGossipDecayTime", long.class).invoke(villager, ((Number) value).longValue());
+                Method method = AdapterMethods.find(villager.getClass(), "setGossipDecayTime", long.class);
+                if (method != null) {
+                    method.invoke(villager, ((Number) value).longValue());
+                }
             }
-            catch (Exception e) {
+            catch (ReflectiveOperationException | LinkageError e) {
             }
         }
     }
 
+    private void addTranslatedComponent(TextComponent message, String[] data, boolean plainText) {
+        String translationKey = processComponent(data[1]);
+        BaseComponent component;
+        if (translationKey.isEmpty() || plainText) {
+            component = new TextComponent(TextComponent.fromLegacyText(processComponent(data[2])));
+        }
+        else {
+            TranslatableComponent translated = new TranslatableComponent(translationKey);
+            translated.setColor(SpigotHandler.DARK_AQUA);
+            translated.setStrikethrough(data.length > 4 && "1".equals(data[4]));
+            component = translated;
+        }
+        if (Config.getGlobal().HOVER_EVENTS && data.length > 3 && !data[3].isEmpty()) {
+            BaseComponent[] hover = TextComponent.fromLegacyText(processComponent(data[3]).replace(Color.MAGIC, ""));
+            component.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(normalizeHoverComponents(hover))));
+        }
+        message.addExtra(component);
+    }
+
+    private static BaseComponent[] normalizeHoverComponents(BaseComponent[] components) {
+        TextComponent root = new TextComponent();
+        root.setBold(false);
+        root.setItalic(false);
+        root.setUnderlined(false);
+        root.setStrikethrough(false);
+        root.setObfuscated(false);
+        for (BaseComponent component : components) {
+            root.addExtra(component);
+        }
+        return new BaseComponent[] { root };
+    }
+
     private static void addBuilder(TextComponent message, StringBuilder builder) {
-        String[] splitBuilder = builder.toString().split(SpigotHandler.DARK_AQUA.toString());
+        String text = Chat.unescapeComponentTags(builder.toString());
+        String[] splitBuilder = text.split(SpigotHandler.DARK_AQUA.toString());
         for (int i = 0; i < splitBuilder.length; i++) {
             if (i > 0) {
                 TextComponent textComponent = new TextComponent(splitBuilder[i]);
@@ -260,40 +275,6 @@ public class SpigotHandler extends SpigotAdapter implements SpigotInterface {
         }
 
         builder.setLength(0);
-    }
-
-    private static Object invokeNoArgumentMethod(Object target, String methodName) {
-        try {
-            return target.getClass().getMethod(methodName).invoke(target);
-        }
-        catch (Exception e) {
-            return null;
-        }
-    }
-
-    private static BaseComponent[] normalizeHoverComponents(BaseComponent[] components) {
-        TextComponent root = new TextComponent();
-        root.setBold(false);
-        root.setItalic(false);
-        root.setUnderlined(false);
-        root.setStrikethrough(false);
-        root.setObfuscated(false);
-
-        for (BaseComponent component : components) {
-            root.addExtra(component);
-        }
-
-        return new BaseComponent[] { root };
-    }
-
-    @SuppressWarnings({ "unchecked", "rawtypes" })
-    private static Object parseEnumValue(Class<?> enumClass, String value) {
-        try {
-            return Enum.valueOf((Class<? extends Enum>) enumClass.asSubclass(Enum.class), value);
-        }
-        catch (Exception e) {
-            return null;
-        }
     }
 
 }

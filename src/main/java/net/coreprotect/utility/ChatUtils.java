@@ -6,11 +6,17 @@ import org.bukkit.command.ConsoleCommandSender;
 
 import java.text.DecimalFormat;
 import java.text.DecimalFormatSymbols;
-import java.text.SimpleDateFormat;
-import java.util.Date;
+import java.time.Instant;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.Locale;
 
 public class ChatUtils {
+
+    private static final DecimalFormatSymbols ROOT_DECIMAL_SYMBOLS = DecimalFormatSymbols.getInstance(Locale.ROOT);
+    private static final ThreadLocal<DecimalFormat> TIME_DECIMAL_FORMAT = ThreadLocal.withInitial(() -> new DecimalFormat("0.00", ROOT_DECIMAL_SYMBOLS));
+    private static final ThreadLocal<DecimalFormat> COORDINATE_DECIMAL_FORMAT = ThreadLocal.withInitial(() -> new DecimalFormat("#.##", ROOT_DECIMAL_SYMBOLS));
+    private static final DateTimeFormatter TIMESTAMP_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss z", Locale.ROOT);
 
     private ChatUtils() {
         throw new IllegalStateException("Utility class");
@@ -33,35 +39,37 @@ public class ChatUtils {
 
     private static String getCoordinateComponent(String command, int worldId, int x, int y, int z, String display) {
         StringBuilder message = new StringBuilder(Chat.COMPONENT_TAG_OPEN + Chat.COMPONENT_COMMAND);
-        DecimalFormat decimalFormat = new DecimalFormat("#.##", new DecimalFormatSymbols(Locale.ROOT));
-        message.append("|/" + command + " teleport wid:" + worldId + " " + decimalFormat.format(x + 0.50) + " " + y + " " + decimalFormat.format(z + 0.50) + "|");
-        message.append(display);
+        DecimalFormat decimalFormat = COORDINATE_DECIMAL_FORMAT.get();
+        String commandText = "/" + command + " teleport wid:" + worldId + " " + decimalFormat.format(x + 0.50) + " " + y + " " + decimalFormat.format(z + 0.50);
+        message.append("|").append(Chat.escapeComponent(commandText)).append("|");
+        message.append(Chat.escapeComponentTags(display));
 
         return message.append(Chat.COMPONENT_TAG_CLOSE).toString();
     }
 
     public static String getPageNavigation(String command, int page, int totalPages) {
         StringBuilder message = new StringBuilder();
+        String escapedCommand = Chat.escapeComponent(command);
 
         // back arrow
         String backArrow = "";
         if (page > 1) {
             backArrow = "◀ ";
-            backArrow = Chat.COMPONENT_TAG_OPEN + Chat.COMPONENT_COMMAND + "|/" + command + " l " + (page - 1) + "|" + backArrow + Chat.COMPONENT_TAG_CLOSE;
+            backArrow = Chat.COMPONENT_TAG_OPEN + Chat.COMPONENT_COMMAND + "|/" + escapedCommand + " l " + (page - 1) + "|" + backArrow + Chat.COMPONENT_TAG_CLOSE;
         }
 
         // next arrow
         String nextArrow = " ";
         if (page < totalPages) {
             nextArrow = " ▶ ";
-            nextArrow = Chat.COMPONENT_TAG_OPEN + Chat.COMPONENT_COMMAND + "|/" + command + " l " + (page + 1) + "|" + nextArrow + Chat.COMPONENT_TAG_CLOSE;
+            nextArrow = Chat.COMPONENT_TAG_OPEN + Chat.COMPONENT_COMMAND + "|/" + escapedCommand + " l " + (page + 1) + "|" + nextArrow + Chat.COMPONENT_TAG_CLOSE;
         }
 
         StringBuilder pagination = new StringBuilder();
         if (totalPages > 1) {
             pagination.append(Color.GREY + "(");
             if (page > 3) {
-                pagination.append(Color.WHITE + Chat.COMPONENT_TAG_OPEN + Chat.COMPONENT_COMMAND + "|/" + command + " l " + 1 + "|" + "1 " + Chat.COMPONENT_TAG_CLOSE);
+                pagination.append(Color.WHITE + Chat.COMPONENT_TAG_OPEN + Chat.COMPONENT_COMMAND + "|/" + escapedCommand + " l " + 1 + "|" + "1 " + Chat.COMPONENT_TAG_CLOSE);
                 if (page > 4 && totalPages > 7) {
                     pagination.append(Color.GREY + "... ");
                 }
@@ -71,7 +79,7 @@ public class ChatUtils {
             }
 
             int displayStart = (page - 2) < 1 ? 1 : (page - 2);
-            int displayEnd = (page + 2) > totalPages ? totalPages : (page + 2);
+            int displayEnd = (int) Math.min(totalPages, page + 2L);
             if (page > 999 || (page > 101 && totalPages > 99999)) { // limit to max 5 page numbers
                 displayStart = (displayStart + 1) < displayEnd ? (displayStart + 1) : displayStart;
                 displayEnd = (displayEnd - 1) > displayStart ? (displayEnd - 1) : displayEnd;
@@ -103,9 +111,9 @@ public class ChatUtils {
                 displayStart = 2;
             }
 
-            for (int displayPage = displayStart; displayPage <= displayEnd; displayPage++) {
+            for (long displayPage = displayStart; displayPage <= displayEnd; displayPage++) {
                 if (page != displayPage) {
-                    pagination.append(Color.WHITE + Chat.COMPONENT_TAG_OPEN + Chat.COMPONENT_COMMAND + "|/" + command + " l " + displayPage + "|" + displayPage + (displayPage < totalPages ? " " : "") + Chat.COMPONENT_TAG_CLOSE);
+                    pagination.append(Color.WHITE + Chat.COMPONENT_TAG_OPEN + Chat.COMPONENT_COMMAND + "|/" + escapedCommand + " l " + displayPage + "|" + displayPage + (displayPage < totalPages ? " " : "") + Chat.COMPONENT_TAG_CLOSE);
                 }
                 else {
                     pagination.append(Color.WHITE + Color.UNDERLINE + displayPage + Color.RESET + (displayPage < totalPages ? " " : ""));
@@ -123,7 +131,7 @@ public class ChatUtils {
                     pagination.append(Color.GREY + "| ");
                 }
                 if (page != totalPages) {
-                    pagination.append(Color.WHITE + Chat.COMPONENT_TAG_OPEN + Chat.COMPONENT_COMMAND + "|/" + command + " l " + totalPages + "|" + totalPages + Chat.COMPONENT_TAG_CLOSE);
+                    pagination.append(Color.WHITE + Chat.COMPONENT_TAG_OPEN + Chat.COMPONENT_COMMAND + "|/" + escapedCommand + " l " + totalPages + "|" + totalPages + Chat.COMPONENT_TAG_CLOSE);
                 }
                 else {
                     pagination.append(Color.WHITE + Color.UNDERLINE + totalPages);
@@ -143,7 +151,7 @@ public class ChatUtils {
             timeSince = 0.00;
         }
 
-        DecimalFormat decimalFormat = new DecimalFormat("0.00");
+        DecimalFormat decimalFormat = TIME_DECIMAL_FORMAT.get();
 
         // minutes
         timeSince = timeSince / 60;
@@ -166,8 +174,7 @@ public class ChatUtils {
         }
 
         if (component) {
-            Date logDate = new Date(resultTime * 1000L);
-            String formattedTimestamp = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss z").format(logDate);
+            String formattedTimestamp = TIMESTAMP_FORMATTER.format(Instant.ofEpochSecond(resultTime).atZone(ZoneId.systemDefault()));
             return createPopupComponent(Color.GREY + formattedTimestamp, Color.GREY + message.toString(), formattedTimestamp);
         }
 
@@ -175,11 +182,12 @@ public class ChatUtils {
     }
 
     public static String createTooltip(String phrase, String tooltip) {
-        if (tooltip.isEmpty()) {
-            return phrase;
+        String safePhrase = phrase == null ? "" : phrase;
+        if (tooltip == null || tooltip.isBlank()) {
+            return Chat.escapeComponentTags(safePhrase);
         }
 
-        return createPopupComponent(tooltip, phrase, null);
+        return createPopupComponent(tooltip, safePhrase, null);
     }
 
     public static String createCopyableText(String phrase, String copyValue, String hover) {
@@ -192,9 +200,9 @@ public class ChatUtils {
         }
 
         StringBuilder message = new StringBuilder(Chat.COMPONENT_TAG_OPEN + Chat.COMPONENT_TRANSLATE);
-        message.append("|").append(escapeComponentData(translationKey));
-        message.append("|").append(escapeComponentData(fallback));
-        message.append("|").append(escapeComponentData(tooltip));
+        message.append("|").append(Chat.escapeComponent(translationKey));
+        message.append("|").append(Chat.escapeComponent(fallback));
+        message.append("|").append(Chat.escapeComponent(tooltip));
         message.append("|").append(strikethrough ? "1" : "0");
         return message.append(Chat.COMPONENT_TAG_CLOSE).toString();
     }
@@ -204,7 +212,7 @@ public class ChatUtils {
             return "";
         }
 
-        return Chat.COMPONENT_TAG_OPEN + Chat.COMPONENT_COMMAND + "|/" + command + " give #" + itemId + "|" + phrase + Chat.COMPONENT_TAG_CLOSE;
+        return Chat.COMPONENT_TAG_OPEN + Chat.COMPONENT_COMMAND + "|" + Chat.escapeComponent("/" + command + " give #" + itemId) + "|" + Chat.escapeComponentTags(phrase) + Chat.COMPONENT_TAG_CLOSE;
     }
 
     // This theoretically initializes the component code, to prevent gson adapter errors
@@ -215,20 +223,13 @@ public class ChatUtils {
     public static String filterComponent(boolean condition, String component) {
         return condition ? component : "";
     }
-    private static String escapeComponentData(String value) {
-        if (value == null) {
-            return "";
-        }
-
-        return value.replace("|", Chat.COMPONENT_PIPE);
-    }
 
     private static String createPopupComponent(String tooltip, String phrase, String copyValue) {
         StringBuilder message = new StringBuilder(Chat.COMPONENT_TAG_OPEN + Chat.COMPONENT_POPUP);
-        message.append("|").append(escapeComponentData(tooltip)).append("|");
-        message.append(escapeComponentData(phrase));
+        message.append("|").append(Chat.escapeComponent(tooltip)).append("|");
+        message.append(Chat.escapeComponent(phrase));
         if (copyValue != null && !copyValue.isEmpty()) {
-            message.append("|").append(escapeComponentData(copyValue));
+            message.append("|").append(Chat.escapeComponent(copyValue));
         }
 
         return message.append(Chat.COMPONENT_TAG_CLOSE).toString();

@@ -19,7 +19,7 @@ public final class LookupComponentUtils {
     }
 
     public static String getMaterialTranslationKey(Material material) {
-        if (material == null || material.getKey() == null) {
+        if (material == null || material.isLegacy()) {
             return "";
         }
 
@@ -29,7 +29,7 @@ public final class LookupComponentUtils {
     }
 
     public static String getEntityTranslationKey(EntityType entityType) {
-        if (entityType == null || entityType.getKey() == null) {
+        if (entityType == null || entityType == EntityType.UNKNOWN) {
             return "";
         }
 
